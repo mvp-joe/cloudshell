@@ -43,11 +43,22 @@ type HandlerOpts struct {
 	Credential *syscall.Credent
 	// Env to provide to the command (kehy=value pairs, same as os.Environ())
 	Env *[]string
-	
+	// Authenticates the HTTP request before proceeding (optinoal) - should return true if the user is authenticated 
+	Authenticator func(r *http.Request) bool
+		
 }
 
 func GetHandler(opts HandlerOpts) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Call the custom authenticator to ensure the user is authenticated, if applicable
+		if (opts.Authenticator != nil) {
+			if (opts.Authenticator(r) == false) {
+				// Send a 401 Unauthorized status code
+				http.Error(w, "Unauthorized Access", http.StatusUnauthorized)
+				return
+			}
+		}
+
 		connectionErrorLimit := opts.ConnectionErrorLimit
 		if connectionErrorLimit < 0 {
 			connectionErrorLimit = DefaultConnectionErrorLimit
