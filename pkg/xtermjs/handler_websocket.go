@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -38,6 +39,11 @@ type HandlerOpts struct {
 	// cycle should be tolerated, beyond this the connection should be deemed dead
 	KeepalivePingTimeout time.Duration
 	MaxBufferSizeBytes   int
+	// User and group to run the command as
+	Credential *syscall.Credent
+	// Env to provide to the command (kehy=value pairs, same as os.Environ())
+	Env *[]string
+	
 }
 
 func GetHandler(opts HandlerOpts) func(http.ResponseWriter, *http.Request) {
@@ -78,7 +84,18 @@ func GetHandler(opts HandlerOpts) func(http.ResponseWriter, *http.Request) {
 		args := opts.Arguments
 		clog.Debugf("starting new tty using command '%s' with arguments ['%s']...", terminal, strings.Join(args, "', '"))
 		cmd := exec.Command(terminal, args...)
-		cmd.Env = os.Environ()
+		
+		// Set up os user/group credential if applicable
+		if (opts.Credential != nil) {
+			cmd.SysProcAttr.Credential = opts.Credential
+		}
+		// Set up Env vars
+		if (opts.Env != nil) {
+			cmd.Env = *opts.Env
+		} else {
+			cmd.Env = os.Environ()
+		}
+	
 		tty, err := pty.Start(cmd)
 		if err != nil {
 			message := fmt.Sprintf("failed to start tty: %s", err)
